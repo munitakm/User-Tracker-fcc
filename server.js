@@ -10,7 +10,7 @@ app.use(express.static('public'))
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html')
 });
-var jsonParser = bodyParser.urlencoded({extended: false});
+const jsonParser = bodyParser.urlencoded({extended: false});
 
 
 // Conecting to MongoDB
@@ -24,11 +24,11 @@ db.once('open', function() {
 
 // Creating a Model for User
 const { Schema } = require('mongoose');
-const schema = new Schema({username: String, data: Date, duration: Number,
-description: String});
+const schema = new Schema({username: String, logs: [Object] });
 const User = mongoose.model('User', schema);
 
 // Aplication:
+// For New User
 app.post("/api/users", jsonParser, (req,res) => { 
   const user = req.body.username;
   console.log(req.body.username);
@@ -43,6 +43,51 @@ app.post("/api/users", jsonParser, (req,res) => {
     }  
   }) 
 })
+
+//To Add exercises 
+
+const validate = (obj) => { 
+  if(!obj.description) { 
+  return { validation: false, item: "description", value: obj.description };
+  } else if (!obj.duration || parseInt(obj.duration) != obj.duration) {
+    return { validation: false, item: "Number", value: obj.duration }
+  } else if(typeof Date.parser(obj.date) != Number) { 
+    return { validation: false, error: `Cast Number failed for value "${obj}"`
+  }
+   }else {
+    return { validation: true }; 
+    }
+  }
+app.post('/api/users/:id?/exercises', jsonParser, (req,res) => { 
+  console.log(req.params);
+  console.log(req.body);
+  User.findById(req.params.id, (err, found) => { 
+    if(!found) { 
+      res.send(`Cast to ObjectId failed for value "${req.params.id}" at path
+      "_id" for model "Users"`);
+    } else {
+      Object.keys(req.body).map(i => { 
+        if(req.body.i == "") { 
+          return res.send(`Path ${i} is required.`)
+        }
+      })
+      const validObj = validate(req.body);
+      if(!validObj.validation) { 
+        res.send(`Cast to "${validObj.item}" failed for value "${validObj.value}"`)
+      } else { 
+        User.save({logs: [{date: req.body.date, duration: req.body.duration,
+          description: req.body.description}]});
+          return res.json({
+            _id: found.id,
+            username: found.username,
+            date: req.body.date,
+            duration: req.body.duration,
+            description:req.body.description})
+      }
+    }
+  })
+})
+
 //-------   
 
 const listener = app.listen(process.env.PORT || 3000, () => {
