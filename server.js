@@ -24,8 +24,30 @@ db.once('open', function() {
 
 // Creating a Model for User
 const { Schema } = require('mongoose');
-const schema = new Schema({username: String, logs: [Object] });
+const schema = new Schema({username: {type: String, unique: true}});
 const User = mongoose.model('User', schema);
+
+// Creating a Model Exercise for User 
+const eSchema = new Schema({
+  username: {
+    type: String, 
+  },  
+  description: {
+    type: String,
+    required: true
+  },
+  
+  duration: {
+    type: Number,
+    min: 0,
+    required: true
+  },
+  
+  date: {
+    type: Date
+  }
+})
+const Exercise = mongoose.model('Exercise', eSchema)
 
 // Aplication:
 // For New User
@@ -43,53 +65,73 @@ app.post("/api/users", jsonParser, (req,res) => {
     }  
   }) 
 })
-
+// To list all the Users
+app.get("/api/users", (req,res) => { 
+  User.find((err,found) => { 
+    res.json(found)
+  })
+})
 //To Add exercises 
-
-const validate = (obj) => { 
-  if(!obj.description) { 
-  return { validation: false, item: "description", value: obj.description };
-  } else if (!obj.duration || parseInt(obj.duration) != obj.duration) {
-    return { validation: false, item: "Number", value: obj.duration }
-  } else if(typeof Date.parser(obj.date) != Number) { 
-    return { validation: false, error: `Cast Number failed for value "${obj}"`
+const dateEmpty = (d) => { 
+  if(d == "") {
+    return Date.now();
+  } else {
+    return Date(d);
   }
-   }else {
-    return { validation: true }; 
-    }
-  }
+};
+const formatDate = (d) => { 
+  let dd = Date(d);
+  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`
+};
 app.post('/api/users/:id?/exercises', jsonParser, (req,res) => { 
-  console.log(req.params);
+  const body = req.body;
   console.log(req.body);
   User.findById(req.params.id, (err, found) => { 
     if(!found) { 
       res.send(`Cast to ObjectId failed for value "${req.params.id}" at path
       "_id" for model "Users"`);
     } else {
-      Object.keys(req.body).map(i => { 
-        if(req.body.i == "") { 
-          return res.send(`Path ${i} is required.`)
-        }
+// validate the fields...
+      const newExercise = new Exercise({ 
+        username: found.username,
+        description: body.description,
+        duration: body.duration,
+        date: dateEmpty(body.date)
       })
-      const validObj = validate(req.body);
-      if(!validObj.validation) { 
-        res.send(`Cast to "${validObj.item}" failed for value "${validObj.value}"`)
-      } else { 
-        User.save({logs: [{date: req.body.date, duration: req.body.duration,
-          description: req.body.description}]});
-          return res.json({
-            _id: found.id,
-            username: found.username,
-            date: req.body.date,
-            duration: req.body.duration,
-            description:req.body.description})
-      }
+      let error = newExercise.validateSync();
+      newExercise.save((err,saved) => {
+        if(err) { 
+         console.log(err);
+        return res.json(err)
+        }
+        let formatedDate = formatDate(saved.date)
+        res.json({ 
+          _id: found.id,
+          username: found.username,
+          date: formatedDate, 
+          duration: saved.duration,
+          description: saved.description
+        })
+      })      
     }
+})
+})
+//-------   
+// Creating the Log of an User
+app.get('/api/users/:id?/logs', (req,res) => { 
+ User.findById(req.params.id, (err,found) => {
+  if(err) return res.json(err.message);
+
+  Exercise.find({username: found.username})
+   .populate()
+   .exec((err,data) => { 
+    res.json({ 
+      username: found.username,
+      logs: data
+    });
   })
 })
-
-//-------   
-
+})
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
 })
