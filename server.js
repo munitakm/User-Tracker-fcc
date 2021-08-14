@@ -118,17 +118,26 @@ app.post('/api/users/:id?/exercises', jsonParser, (req,res) => {
 })
 //-------   
 // Creating the Log of an User
-app.get('/api/users/:id?/logs', (req,res) => { 
+app.get('/api/users/:id?/logs',  (req,res) => { 
+  const {from, to, limit} = req.query
+  console.log(req.query)
   User.findById(req.params.id, (err,found) => { 
-    Exercise.find({username: found.username})
-      .select(['description', 'date', 'duration'])
+    if(err) return res.send('User not found')
+    Exercise.find({username: found.username}, 
+      {date: {
+        $gte: new Date(from),
+        $lte: new Date(to),  
+      }})
+      .select(['description', 'date', 'duration', '-_id'])
+      .limit(+limit)
       .exec((err, data) => { 
+        if(err) return res.json(err);
       let size = data.length;
         res.json({ 
         username: found.username,
         _id: found.id,
         count: size,
-        logs: data
+        log: data
       })
     }) 
   })
