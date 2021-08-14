@@ -12,7 +12,16 @@ app.get('/', (req, res) => {
 });
 const jsonParser = bodyParser.urlencoded({extended: false});
 
+// Functions:
+const dateEmpty = (d) => { 
+  if(!d) {
+    return new Date();
+  } else {
+    return new Date(d); 
+    } 
+};
 
+//---------------------
 // Conecting to MongoDB
 mongoose.connect(process.env.MONGO_DB, 
 {useNewUrlParser: true, useUnifiedTopology: true});
@@ -44,7 +53,8 @@ const eSchema = new Schema({
   },
   
   date: {
-    type: Date
+    type: Date,
+    required: true
   }
 })
 const Exercise = mongoose.model('Exercise', eSchema)
@@ -72,17 +82,7 @@ app.get("/api/users", (req,res) => {
   })
 })
 //To Add exercises 
-const dateEmpty = (d) => { 
-  if(d == "") {
-    return Date.now();
-  } else {
-    return Date(d);
-  }
-};
-const formatDate = (d) => { 
-  let dd = Date(d);
-  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`
-};
+
 app.post('/api/users/:id?/exercises', jsonParser, (req,res) => { 
   const body = req.body;
   console.log(req.body);
@@ -98,13 +98,12 @@ app.post('/api/users/:id?/exercises', jsonParser, (req,res) => {
         duration: body.duration,
         date: dateEmpty(body.date)
       })
-      let error = newExercise.validateSync();
       newExercise.save((err,saved) => {
         if(err) { 
          console.log(err);
-        return res.json(err)
-        }
-        let formatedDate = formatDate(saved.date)
+        return res.json(err.message)
+        } else {
+        let formatedDate = saved.date.toDateString();
         res.json({ 
           _id: found.id,
           username: found.username,
@@ -112,26 +111,30 @@ app.post('/api/users/:id?/exercises', jsonParser, (req,res) => {
           duration: saved.duration,
           description: saved.description
         })
-      })      
-    }
+      }      
+    })
+  }      
 })
 })
 //-------   
 // Creating the Log of an User
 app.get('/api/users/:id?/logs', (req,res) => { 
- User.findById(req.params.id, (err,found) => {
-  if(err) return res.json(err.message);
-
-  Exercise.find({username: found.username})
-   .populate()
-   .exec((err,data) => { 
-    res.json({ 
-      username: found.username,
-      logs: data
-    });
+  User.findById(req.params.id, (err,found) => { 
+    Exercise.find({username: found.username})
+      .select(['description', 'date', 'duration'])
+      .exec((err, data) => { 
+      let size = data.length;
+        res.json({ 
+        username: found.username,
+        _id: found.id,
+        count: size,
+        logs: data
+      })
+    }) 
   })
 })
-})
+
+
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
 })
